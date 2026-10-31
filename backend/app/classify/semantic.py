@@ -32,19 +32,27 @@ SEED = {
     "INTEREST": ["INTEREST CREDIT", "SB INT PD"],
     "BANK_CHARGES": ["SMS CHARGES", "MIN BAL CHARGES", "DEBIT CARD ANNUAL FEE"],
     "FOOD_DINING": ["UPI/SWIGGY/FOOD", "UPI/ZOMATO/ORDER", "POS/RESTAURANT", "UPI/CAFE COFFEE DAY"],
-    "GENERAL_EXPENSE": ["POS/RELIANCE SMART", "UPI/UBER/RIDE", "UPI/BIGBASKET/GROCERY", "UPI/AMAZON/SHOPPING", "UPI/PHARMACY"],
+    "GROCERIES": ["POS/RELIANCE SMART", "UPI/BIGBASKET/GROCERY"],
+    "SHOPPING": ["UPI/AMAZON/SHOPPING", "POS/FLIPKART/ORDER"],
+    "TRAVEL": ["UPI/UBER/RIDE", "IRCTC/TICKET"],
+    "FUEL": ["POS/HPCL/PETROL PUMP"],
+    "MEDICAL": ["UPI/PHARMACY", "POS/HOSPITAL/BILL"],
+    "EDUCATION": ["NEFT/SCHOOL/TERM FEES", "COLLEGE TUITION"],
+    "GENERAL_EXPENSE": ["POS/RETAIL STORE", "UPI/LOCAL SHOP"],
     "OTHER_CREDIT": ["DIVIDEND/ITC LTD", "FD MATURITY PROCEEDS", "MF REDEMPTION"],
     "INTERNAL_TRANSFER": ["IMPS/OWN ACCOUNT TRANSFER", "SELF TRANSFER TO SAVINGS"],
 }
 
 
 _BOILERPLATE = re.compile(r"\b(NEFT|IMPS|UPI|RTGS|P2A|P2M|NACH|ACH|ECS|DR|CR|MB|INB|TRF|TO|BY)\b")
+_IFSC = re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b")
 
 
 def knn_text(norm: str) -> str:
-    """Placeholders, digits and payment-rail words carry no category meaning; matching on them would let
-    one remembered IMPS narration pull every other IMPS payment towards its category."""
-    text = re.sub(r"<[A-Z_]+>|\d+", " ", norm or "")
+    """Placeholders, digits, payment-rail words and branch codes carry no category meaning; matching on them
+    would let one remembered IMPS narration pull every other IMPS payment towards its category, and an HDFC
+    branch code pull a payment to a person towards a remembered HDFC loan."""
+    text = re.sub(r"<[A-Z_]+>|\d+", " ", _IFSC.sub(" ", norm or ""))
     return re.sub(r"[\s/]+", " ", _BOILERPLATE.sub(" ", text)).strip()
 
 

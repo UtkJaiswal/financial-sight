@@ -20,6 +20,12 @@ CATEGORIES = {
     "CASH_WITHDRAWAL":   {"label": "Cash withdrawal",     "dir": "D", "treatment": "expense"},
     "BANK_CHARGES":      {"label": "Bank charges",        "dir": "D", "treatment": "expense"},
     "FOOD_DINING":       {"label": "Food & dining",       "dir": "D", "treatment": "expense"},
+    "GROCERIES":         {"label": "Groceries",           "dir": "D", "treatment": "expense"},
+    "SHOPPING":          {"label": "Shopping",            "dir": "D", "treatment": "expense"},
+    "TRAVEL":            {"label": "Travel",              "dir": "D", "treatment": "expense"},
+    "FUEL":              {"label": "Fuel",                "dir": "D", "treatment": "expense"},
+    "MEDICAL":           {"label": "Medical",             "dir": "D", "treatment": "expense"},
+    "EDUCATION":         {"label": "Education",           "dir": "D", "treatment": "expense"},
     "GENERAL_EXPENSE":   {"label": "General spending",    "dir": "D", "treatment": "expense"},
     "CASH_DEPOSIT":      {"label": "Cash deposit",        "dir": "C", "treatment": "review_credit"},
     "INTEREST":          {"label": "Interest",            "dir": "C", "treatment": "other_credit"},
@@ -31,6 +37,8 @@ INCOME = {k for k, v in CATEGORIES.items() if v["treatment"] == "income"}
 EXCLUDED = {k for k, v in CATEGORIES.items() if v["treatment"] == "excluded"}
 OBLIGATIONS = {k for k, v in CATEGORIES.items() if v["treatment"] == "obligation"}
 BASELINE = {"C": "OTHER_CREDIT", "D": "GENERAL_EXPENSE"}
+# Finer spending labels that the older ground-truth files call General spending. Evaluations compare at that level.
+ROLLUP = {c: "GENERAL_EXPENSE" for c in ("GROCERIES", "SHOPPING", "TRAVEL", "FUEL", "MEDICAL", "EDUCATION")}
 
 
 def valid_for(direction: str) -> list[str]:
