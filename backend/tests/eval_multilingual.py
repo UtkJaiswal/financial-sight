@@ -22,7 +22,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import analysis  # noqa: E402
 from app.classify import engine, semantic  # noqa: E402
-from app.classify.categories import INCOME  # noqa: E402
+from app.classify.categories import INCOME, ROLLUP  # noqa: E402
 from app.db import connect, q  # noqa: E402
 from app.ingest import service as ingest  # noqa: E402
 from app.metrics import effective  # noqa: E402
@@ -73,15 +73,17 @@ for m in manifest:
         if not g:
             unmatched += 1
             continue
-        rows.append({"dataset": m["id"], "split": m["split"], "lang": g["lang"], "gold": g["category"], "pred": t["category"], "status": t["status"],
+        rows.append({"dataset": m["id"], "split": m["split"], "lang": g["lang"], "gold": g["category"], "pred": ROLLUP.get(t["category"], t["category"]), "status": t["status"],
                      "desc": g["description"], "amount": t["amount"], "tags": g["tags"]})
     inc = (snap.get("metrics") or {}).get("estimated_income") or {}
     flags = {f["code"] for f in snap.get("flags", [])} & FLAG_CODES
     expected = set(m["expected_flags"])
     true_inc = m["true_income_median"]
+    # the dataset's true income is gross, so compare it with gross receipts where costs were taken off
+    pred_inc = (inc.get("stats") or {}).get("gross_receipts_monthly", inc.get("value"))
     stmt_results.append({"id": m["id"], "split": m["split"], "name": m["name"], "profile_true": m["profile"], "profile_pred": snap.get("profile"),
-                         "income_true": true_inc, "income_pred": inc.get("value"), "income_method": inc.get("method"),
-                         "income_abs_pct_err": round(abs((inc.get("value") or 0) - true_inc) / true_inc, 3) if true_inc else None,
+                         "income_true": true_inc, "income_pred": pred_inc, "income_method": inc.get("method"),
+                         "income_abs_pct_err": round(abs((pred_inc or 0) - true_inc) / true_inc, 3) if true_inc else None,
                          "flags_expected": sorted(expected), "flags_found": sorted(flags & expected), "flags_missed": sorted(expected - flags),
                          "flags_unexpected": sorted(flags - expected), "unmatched_rows": unmatched})
     print(f"{m['id']} {m['split']:4s} rows={n_rows:4d} upload={sum(timing['upload_s'][-len(m['files']):]):.2f}s "

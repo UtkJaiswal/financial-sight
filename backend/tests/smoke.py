@@ -17,7 +17,7 @@ with TestClient(app) as c:
         m = a["metrics"]
         print("\n====", case["name"], "| profile", a["profile"], "| txns", a["n_transactions"], "| status", a["status_counts"])
         for k in ("estimated_income","recurring_obligations","foir","net_cash_flow","average_balance"):
-            v = m[k]["value"]; print(f"  {k:24s} {v if k=='foir' else inr(v):>14}  {m[k]['method'][:110]}")
+            v = m[k]["value"]; print(f"  {k:24s} {str(v) if k=='foir' else inr(v):>14}  {m[k]['method'][:110]}")
         print("  months:", a["coverage"])
         for f in a["flags"]: print(f"  [{f['severity']:6s}] {f['title']}: {f['detail'][:140]}")
         for s in a["statements"]: print(f"  stmt {s['bank_name']} {s['acct_masked']} {s['period_start']}..{s['period_end']} {s['recon_status']} diff={s['recon_diff']} breaks={s['n_breaks']} rows={s['n_rows']}")

@@ -10,7 +10,7 @@ with TestClient(app) as c:
     sme = [x for x in c.get("/api/cases").json() if "Kavya" in x["name"]][0]["case_id"]
     txns = c.get(f"/api/cases/{sme}/transactions").json()
     school = next(t for t in txns if "VIDYA MANDIR" in t["description"])
-    assert school["category"] == "BANK_CHARGES"
+    assert school["category"] == "EDUCATION", school["category"]
     snaps_before = len(c.get(f"/api/cases/{sme}/snapshots").json())
 
     # correction with an idempotency key
@@ -32,7 +32,7 @@ with TestClient(app) as c:
 
     d = c.get(f"/api/cases/{sme}/transactions/{school['txn_id']}").json()
     assert d["txn"]["category"] == "GENERAL_EXPENSE" and d["txn"]["status"] == "confirmed"
-    assert d["txn"]["model_category"] == "BANK_CHARGES", "original classification must be preserved"
+    assert d["txn"]["model_category"] == "EDUCATION", "original classification must be preserved"
     print("history:", [(h["category"], h["status"]) for h in d["history"]], "| overrides:", len(d["overrides"]))
 
     # wrong direction is refused
