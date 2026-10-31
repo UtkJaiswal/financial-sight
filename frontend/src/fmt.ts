@@ -5,6 +5,13 @@ const inr2 = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR"
 export const money = (paise: number | null | undefined, exact = false) =>
   paise === null || paise === undefined ? "—" : (exact ? inr2 : inr0).format(paise / 100);
 
+/** hundredths of any currency, shown in that currency */
+export const moneyIn = (currency: string | undefined, amount: number | null | undefined) => {
+  if (currency === undefined || currency === "INR") return money(amount, true);
+  if (amount === null || amount === undefined) return "—";
+  return `${currency} ${(amount / 100).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
 /** paise -> "₹4.2L", "₹1.1Cr", "₹850" for chart axes and dense UI */
 export function compact(paise: number | null | undefined): string {
   if (paise === null || paise === undefined) return "—";

@@ -54,7 +54,7 @@ export default function MetricDrawer({ metric: m, txns, onClose, onOpen }: Props
           <div className="recon">
             {Object.entries(m.stats).map(([k, v]) => (
               <div key={k}><div className="label">{k.replace(/_/g, " ")}</div>
-                <div className="v">{k === "cv" ? v.toFixed(2) : k === "trend_3m" ? pct(v) : compact(v)}</div></div>
+                <div className="v">{k === "cv" ? v.toFixed(2) : k === "trend_3m" || k === "share_of_all_credits" ? pct(v) : compact(v)}</div></div>
             ))}
           </div>
         </section>
@@ -70,6 +70,13 @@ export default function MetricDrawer({ metric: m, txns, onClose, onOpen }: Props
         </section>
       )}
 
+      {m.unusual_months && m.unusual_months.length > 0 && (
+        <section>
+          <h4>Unusual months</h4>
+          {m.unusual_months.map((u) => <div className="note warn" key={u.month}>{monthLabel(u.month)}: {money(u.value)}, a {u.kind} against the median of {money(u.median)}.</div>)}
+        </section>
+      )}
+
       {m.items && (
         <section>
           <h4>{m.key === "recurring_obligations" ? "Commitments" : "Typical monthly outflows by category"}</h4>
@@ -78,7 +85,7 @@ export default function MetricDrawer({ metric: m, txns, onClose, onOpen }: Props
               <div className="row"><CategoryChip cat={i.category} /><span className="small">{i.counterparty}</span><span className="spacer" />
                 <span className="num">{money(i.monthly_amount)}/mo</span></div>
               <div className="small muted">{m.key === "recurring_obligations"
-                ? `${i.months.length} months · ${i.active ? "active, counted" : "inactive, not counted"}`
+                ? `${i.why ? `${i.why} · ` : ""}${i.months.length} months · ${i.active ? "active, counted" : i.pending ? "unconfirmed and irregular, not counted until reviewed" : "inactive, not counted"}`
                 : `seen in ${i.months.length} month${i.months.length > 1 ? "s" : ""}, averaged over all covered months`}</div>
             </div>
           ))}

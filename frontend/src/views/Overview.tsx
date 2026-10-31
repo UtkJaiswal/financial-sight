@@ -4,6 +4,7 @@ import { Bar, CartesianGrid, ComposedChart, Line, LineChart, ReferenceLine, Resp
 import type { Analysis, Metric, Txn } from "../types";
 import { compact, money, monthLabel, pct, shortDate } from "../fmt";
 import { CategoryChip, SevPill, useCats } from "../components/ui";
+import StatementRequests from "../components/StatementRequests";
 
 interface Props {
   a: Analysis;
@@ -62,6 +63,9 @@ export default function Overview({ a, txns, onMetric, onFlags, onTxns, onStateme
   const reconciled = a.statements.filter((s) => s.recon_status === "reconciled").length;
   const acctName = (id: string) => { const ac = a.accounts.find((x) => x.account_id === id); return ac ? `${ac.bank_name} ${ac.acct_masked.slice(-4)}` : id; };
 
+  const flows = a.money_flows ?? { edges: [], cycles: [], parties: [], pass_through: [] };
+  const heldCount = txns.filter((t) => t.attributes?.includes("possible_rotation") && t.status !== "confirmed").length;
+
   const patterns = a.patterns
     .map((p) => {
       const members = p.txn_ids.map((i) => byId[i]).filter(Boolean);
@@ -83,9 +87,12 @@ export default function Overview({ a, txns, onMetric, onFlags, onTxns, onStateme
 
   return (
     <div className="content-inner">
+      <StatementRequests requests={a.statement_requests} onTxns={onTxns} onUpload={onStatements} />
       <div className="kpis">
         <Kpi m={inc} lead onClick={() => onMetric("estimated_income")}
              foot={<>{inc?.profile === "SALARIED" ? "Salaried" : "Self-employed"} · {inc?.method}
+               {inc?.stats?.gross_receipts_monthly !== undefined && <><br /><b>Receipts {compact(inc.stats.gross_receipts_monthly)}</b> less costs {compact(inc.stats.business_costs_monthly)}</>}
+               {inc?.stats?.income_if_cash_real !== undefined && <><br /><b>{compact(inc.stats.income_if_cash_real)}</b> if cash deposits are real sales</>}
                {inc?.profile !== "SALARIED" && inc?.stats?.conservative !== undefined && (inc?.stats?.cv ?? 0) > 0.25 &&
                  <><br /><b>Conservative {compact(inc.stats.conservative)}</b> (reached in 3 of 4 months)</>}
                {inc?.stats?.provisional !== undefined && inc.stats.provisional > (inc.value ?? 0) &&
@@ -123,6 +130,50 @@ export default function Overview({ a, txns, onMetric, onFlags, onTxns, onStateme
         <button className="btn ghost sm" onClick={onStatements}>Statements <ChevronRight size={14} /></button>
       </div>
 
+      {(flows.edges.length + flows.cycles.length + flows.parties.length + flows.pass_through.length > 0) && (
+        <div className="card">
+          <div className="card-h">
+            <div><h3>Money moving around</h3><div className="hint">The same money passing between accounts or parties should not read as income. Choose a row to see its transactions.</div></div>
+            {heldCount > 0 && <span className="pill warn">{heldCount} to review</span>}
+          </div>
+          <div className="card-b">
+            <div className="recon">
+              <div><div className="label">Estimated income</div><div className="v">{compact(inc?.value)}</div></div>
+              {inc?.stats?.income_if_flagged_real !== undefined && <div><div className="label">If every flagged credit were real</div><div className="v">{compact(inc.stats.income_if_flagged_real)}</div></div>}
+              <div><div className="label">Net cash flow per month</div><div className="v">{compact(m.net_cash_flow?.value)}</div></div>
+              <div><div className="label">Share of all credits moved</div><div className="v">{pct(m.money_movement?.stats?.share_of_all_credits ?? 0)}</div></div>
+            </div>
+          </div>
+          <div style={{ overflowX: "auto" }}>
+            <table className="tbl">
+              <thead><tr><th>Movement</th><th>Finding</th><th className="r">Times</th><th className="r">Amount</th></tr></thead>
+              <tbody>
+                {flows.cycles.map((c) => (
+                  <tr key={c.path.join(">")} className="click" onClick={() => onTxns(c.txn_ids, "Money moving in a circle")}>
+                    <td>{c.path.map(acctName).join(" → ")}</td><td><span className="pill crit">Circle</span></td><td className="r num">{c.count}</td><td className="r num">{money(c.amount)}</td>
+                  </tr>
+                ))}
+                {flows.parties.map((p) => (
+                  <tr key={p.counterparty} className="click" onClick={() => onTxns(p.txn_ids, `To and from ${p.counterparty}`)}>
+                    <td>To and back from {p.counterparty}</td><td><span className="pill warn">Possible rotation</span></td><td className="r num">{p.count}</td><td className="r num">{money(p.out)}</td>
+                  </tr>
+                ))}
+                {flows.pass_through.map((p) => (
+                  <tr key={p.account_id} className="click" onClick={() => onTxns(p.txn_ids, "In and straight back out")}>
+                    <td>In and straight out of {acctName(p.account_id)}</td><td><span className="pill warn">Possible rotation</span></td><td className="r num">{p.count}</td><td className="r num">{money(p.amount)}</td>
+                  </tr>
+                ))}
+                {flows.edges.map((e) => (
+                  <tr key={`${e.from}${e.to}${e.possible}`} className="click" onClick={() => onTxns(e.txn_ids, `${acctName(e.from)} to ${acctName(e.to)}`)}>
+                    <td>{acctName(e.from)} → {acctName(e.to)}</td><td>{e.possible ? <span className="pill warn">Possible rotation</span> : <span className="pill ok">Matched transfer</span>}</td><td className="r num">{e.count}</td><td className="r num">{money(e.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className="grid-2">
         <div className="card">
           <div className="card-h">
@@ -146,7 +197,7 @@ export default function Overview({ a, txns, onMetric, onFlags, onTxns, onStateme
         </div>
         <div className="card">
           <div className="card-h">
-            <div><h3>Income by month</h3><div className="hint">{inc?.profile === "SALARIED" ? "Salary credits" : "Business receipts"} in fully covered months</div></div>
+            <div><h3>Income by month</h3><div className="hint">{inc?.profile === "SALARIED" ? "Salary credits" : inc?.stats?.business_costs_monthly ? "Receipts minus business costs" : "Business receipts"} in fully covered months</div></div>
             {trend !== undefined && <span className={`pill ${trend < -0.15 ? "crit" : trend < 0 ? "warn" : "ok"}`}>{trend >= 0 ? "+" : ""}{pct(trend)} last 3 mo</span>}
           </div>
           <div className="card-b chart">
@@ -163,6 +214,30 @@ export default function Overview({ a, txns, onMetric, onFlags, onTxns, onStateme
             </ResponsiveContainer>
           </div>
         </div>
+      </div>
+
+      <div className="card">
+        <div className="card-h">
+          <div><h3>Monthly breakdown</h3><div className="hint">All credits and debits as printed; choose an amount to see its transactions.{m.cash_flow_trend?.highlight_months?.length ? ` Months driving the trend are highlighted.` : ""}</div></div>
+          {m.cash_flow_trend?.assessment && <button className={`pill ${m.cash_flow_trend.assessment === "improving" ? "ok" : m.cash_flow_trend.assessment === "deteriorating" ? "crit" : "info"}`} style={{ border: 0, cursor: "pointer" }} onClick={() => onMetric("cash_flow_trend")}>Cash flow {m.cash_flow_trend.assessment}</button>}
+        </div>
+        <table className="tbl">
+          <thead><tr><th>Month</th><th>Coverage</th><th className="r">Credits</th><th className="r">Debits</th><th className="r">Adjusted net</th><th className="r">Average balance</th><th className="r">Income</th><th className="r">Obligations</th></tr></thead>
+          <tbody>
+            {a.monthly.map((r) => (
+              <tr key={r.month} className={m.cash_flow_trend?.highlight_months?.includes(r.month) ? "sel" : ""}>
+                <td>{monthLabel(r.month)}</td>
+                <td className="small muted">{r.active ? r.coverage : "no activity yet"}</td>
+                <td className="r num"><button className="btn ghost sm" disabled={!r.credit_ids.length} onClick={() => onTxns(r.credit_ids, `Credits, ${monthLabel(r.month)}`)}>{money(r.credits)}</button></td>
+                <td className="r num"><button className="btn ghost sm" disabled={!r.debit_ids.length} onClick={() => onTxns(r.debit_ids, `Debits, ${monthLabel(r.month)}`)}>{money(r.debits)}</button></td>
+                <td className={`r num ${r.net < 0 ? "neg" : ""}`}>{money(r.net)}</td>
+                <td className="r num">{money(r.avg_balance)}</td>
+                <td className="r num">{money(r.income)}</td>
+                <td className="r num">{money(r.obligations)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       <div className="grid-2">

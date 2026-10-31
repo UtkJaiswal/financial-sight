@@ -1,4 +1,4 @@
-import type { Analysis, AuditEntry, CaseSummary, Diff, Evaluation, FileReport, Meta, Txn, TxnDetail } from "./types";
+import type { Analysis, AuditEntry, CaseSummary, Diff, Evaluation, FileReport, EngineComparison, EngineConfig, EngineSummary, Meta, ReportData, RuleEnginesData, Txn, TxnDetail } from "./types";
 
 export interface Identity { user: string; role: string }
 
@@ -49,6 +49,16 @@ export const api = {
     if (password) fd.append("password", password);
     return call<{ file: FileReport; snapshot_id: string }>(`/api/cases/${id}/files`, { method: "POST", body: fd });
   },
+  report: (id: string) => call<ReportData>(`/api/cases/${id}/report`),
+  setRate: (id: string, body: { currency: string; month: string; rate: string; source: string }) =>
+    call<{ snapshot_id: string }>(`/api/cases/${id}/fx-rates`, { method: "POST", body: JSON.stringify(body) }),
+  ruleEngines: () => call<RuleEnginesData>("/api/rule-engines"),
+  ruleEngine: (id: string) => call<EngineSummary & { history: { version: number; actor: string; note: string; created_at: string }[] }>(`/api/rule-engines/${id}`),
+  createRuleEngine: (body: { name: string; based_on: string }) => call<EngineSummary>("/api/rule-engines", { method: "POST", body: JSON.stringify(body) }),
+  saveRuleEngine: (id: string, config: EngineConfig, note: string) => call<EngineSummary>(`/api/rule-engines/${id}`, { method: "PUT", body: JSON.stringify({ config, note }) }),
+  deleteRuleEngine: (id: string) => call<{ deleted: boolean }>(`/api/rule-engines/${id}`, { method: "DELETE" }),
+  assignEngine: (id: string, engine_id: string) => call<{ snapshot_id: string }>(`/api/cases/${id}/engine`, { method: "POST", body: JSON.stringify({ engine_id }) }),
+  engineComparison: (id: string) => call<EngineComparison[]>(`/api/cases/${id}/engine-comparison`),
   evaluation: (id: string) => call<Evaluation>(`/api/cases/${id}/evaluation`),
   audit: (id?: string) => call<{ entries: AuditEntry[]; verification: { ok: boolean; entries: number; head?: string; broken_at?: number } }>(
     `/api/audit${id ? `?case_id=${id}` : ""}`),

@@ -5,7 +5,7 @@ import { SevPill } from "../components/ui";
 interface Props { flags: Flag[]; onTxns: (ids: string[], label: string) => void }
 
 const GROUPS: [Flag["category"], string, string][] = [
-  ["risk", "Financial behaviour", "Indicators from the customer's cash flow. Each needs analyst judgement; none is a finding of fraud."],
+  ["risk", "Financial behaviour", "Indicators from the customer's cash flow. Information for credit review, not a decision. Each needs analyst judgement; none is a finding of fraud."],
   ["data", "Data quality", "Problems with the statements themselves: unread pages, gaps, reconciliation breaks."],
   ["review", "Classification review", "Transactions the system could not place with confidence."],
 ];
@@ -25,6 +25,7 @@ export default function Flags({ flags, onTxns }: Props) {
                 <div style={{ minWidth: 0 }}>
                   <div className="row wrap"><span className="flag-title">{f.title}</span><SevPill sev={f.severity} /></div>
                   <div className="flag-detail">{f.detail}</div>
+                  {f.rule && <div className="small muted" style={{ marginTop: 4 }}><b>Rule:</b> {f.rule}</div>}
                   {f.months.length > 0 && <div className="row wrap" style={{ marginTop: 6, gap: 4 }}>{f.months.map((m) => <span key={m} className="pill">{monthLabel(m)}</span>)}</div>}
                 </div>
                 {f.txn_ids.length > 0 ? <button className="btn sm" onClick={() => onTxns(f.txn_ids, f.title)}>View {f.txn_ids.length}</button> : <span />}

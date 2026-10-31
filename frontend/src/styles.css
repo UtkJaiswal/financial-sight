@@ -335,3 +335,33 @@ textarea.input { width: 100%; resize: vertical; min-height: 64px; }
   .side { display: none; }
   .topbar, .content { padding-left: 16px; padding-right: 16px; }
 }
+
+/* rule engines, earnings */
+.engine-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.engine-field { display: grid; gap: 5px; align-content: start; }
+.num-input { width: 96px; text-align: right; }
+.earn-bar { height: 8px; background: var(--surface-3); border-radius: 4px; overflow: hidden; }
+.earn-bar span { display: block; height: 100%; background: var(--t-income); }
+.earn-bar span.neg-bar { background: var(--crit); }
+.side-btn.active { outline: 1px solid var(--accent); }
+
+/* report */
+.report .stack { gap: 12px; }
+.evidence { margin-top: 2px; }
+.evidence-rows.closed { display: none; }
+.print-only { display: none; }
+.warn-text { color: var(--warn); }
+@media print {
+  .side, .tabs, .no-print, .toast-wrap { display: none !important; }
+  .print-only { display: inline; }
+  .app, .content, main { display: block !important; height: auto !important; overflow: visible !important; }
+  .evidence-rows.closed { display: block; }
+  .evidence-rows { overflow: visible !important; }
+  .report-section > .card-h { break-after: avoid; }
+  .tbl tr { break-inside: avoid; }
+  .tbl th { position: static; }
+  .report .tbl { font-size: 10px; table-layout: fixed; }
+  .report .tbl td, .report .tbl th { white-space: normal !important; overflow-wrap: anywhere; padding: 4px 6px; }
+  .report .desc { white-space: normal; max-width: none; overflow: visible; }
+  .card { box-shadow: none; }
+}

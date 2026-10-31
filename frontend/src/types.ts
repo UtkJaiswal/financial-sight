@@ -40,9 +40,16 @@ export interface Metric {
   value: number | null;
   method: string;
   profile?: string;
-  monthly?: { month: string; value: number }[];
+  monthly?: { month: string; value: number; gross?: number; costs?: number; regular?: number; variable?: number }[];
+  unusual_months?: { month: string; kind: "spike" | "drop"; value: number; median: number }[];
+  consistency?: string;
+  assessment?: string;
+  highlight_months?: string[];
+  rules?: { max_foir: number; min_surplus_after_obligations_paise: number };
+  rules_source?: string;
+  checks?: { rule: string; value: number | null; limit: number; result: string; shown: string }[];
   stats?: Record<string, number>;
-  items?: { category: string; label: string; counterparty: string; monthly_amount: number; months: string[]; active: boolean; txn_ids: string[] }[];
+  items?: { category: string; label: string; counterparty: string; monthly_amount: number; months: string[]; pending?: boolean; why?: string; active: boolean; txn_ids: string[] }[];
   trend?: number | null;
   outflows?: number;
   included: string[];
@@ -65,6 +72,9 @@ export interface MonthRow {
   net: number;
   n_txns: number;
   avg_balance: number | null;
+  active: boolean;
+  credit_ids: string[];
+  debit_ids: string[];
   balances: Record<string, { avg: number; min: number; low_days: number; days: number }>;
 }
 
@@ -76,6 +86,105 @@ export interface Flag {
   txn_ids: string[];
   months: string[];
   category: "risk" | "data" | "review";
+  rule?: string;
+}
+
+export interface FxView {
+  reporting: string;
+  rates: { currency: string; month: string; rate: string; source: string; actor: string }[];
+  missing: [string, string][];
+  currencies: string[];
+  no_rate_rows: number;
+  no_rate_txn_ids: string[];
+  assumed_accounts: string[];
+}
+
+export interface AccountMonth {
+  month: string; coverage: "full" | "partial" | "missing"; credits: number; debits: number; credits_adjusted: number; debits_adjusted: number;
+  net: number; avg_balance: number | null; credit_ids: string[]; debit_ids: string[];
+}
+
+export interface HistoryEvent { date: string; kind: string; title: string; detail: string; txn_ids: string[] }
+export interface Party { name: string; amount: number; count: number; txn_ids: string[]; share?: number; months?: number }
+
+export interface AccountView {
+  account_id: string; bank_name: string | null; acct_masked: string | null; currency: string; months: AccountMonth[]; missing_months: string[]; partial_months: string[];
+  summary: { first_entry: string | null; last_entry: string | null; n_txns: number; n_statements: number; total_credits: number; total_debits: number; opening: number | null; latest_balance: number | null;
+    lowest_balance: number | null; highest_balance: number | null; returned_payments: number; transfers_in: number; transfers_out: number };
+  by_category: { category: string; credits: number; debits: number; count: number }[];
+  top_in: Party[];
+  top_out: Party[];
+  events: HistoryEvent[];
+}
+
+export interface ScoreParameter { key: string; label: string; unit: string; source: string; weight: number; full_at: number; zero_at: number; value: number | null; txn_ids: string[]; points: number | null; assessed: boolean; reason?: string }
+
+export interface CreditScoreData {
+  engine: string; engine_version: number; notice: string; parameters: ScoreParameter[]; assessed_weight: number; min_assessed_weight: number;
+  score: number | null; band: string | null; reason: string | null; bands: { min: number; label: string }[]; months_used: string[];
+}
+
+export interface ReconciliationData {
+  rules: { recon_tolerance_paise: number; recon_require_closing: boolean; recon_max_row_breaks: number };
+  statements: { statement_id: string; bank_name: string; acct_masked: string; currency: string; period_start: string; period_end: string; opening: number | null; opening_source: string; credits: number; debits: number;
+    computed_closing: number | null; stated_closing: number | null; difference: number | null; n_rows: number; n_breaks: number; result: "within" | "outside"; reasons: string[];
+    breaks: { txn_id: string; date: string; note: string; file: string; page: number; row: number }[] }[];
+  continuity: { kind: string; detail: string; account_id: string }[];
+  transfers: { matched_pairs: number; matched_amount: number; held_rows: number };
+  summary: { statements: number; within: number; outside: number; row_breaks: number; gaps: number; overlaps: number; balance_mismatches: number };
+}
+
+export interface EarningsData {
+  monthly: { month: string; receipts: number; costs: number; earned: number; cumulative: number }[]; total_receipts: number; total_costs: number; total_earned: number; months: number;
+  average_monthly: number | null; estimate: number | null; annualised: number | null; best: { month: string } | null; worst: { month: string } | null; last_3_average: number | null;
+  payers: Party[]; n_payers: number; pending_review: number; concentrated: boolean; concentration_limit: number;
+}
+
+export interface StatementRequestsData {
+  prompt: string | null;
+  items: { key: string; label: string; reason: string; count: number; amount: number; txn_ids: string[]; kind: string }[];
+  matched_pairs: number; matched_amount: number; accounts_uploaded: number;
+}
+
+export interface EngineConfig {
+  params: Record<string, number | string | boolean>;
+  custom_rules: { keyword: string; direction: string; category: string; weight: number }[];
+  score: { parameters: Record<string, { enabled: boolean; weight: number; full_at: number; zero_at: number }>; bands: { min: number; label: string }[]; min_assessed_weight: number };
+}
+
+export interface EngineSummary { engine_id: string; name: string; description: string; version: number; config: EngineConfig; is_sample: boolean; editable: boolean; cases: number }
+
+export interface RuleEnginesData {
+  engines: EngineSummary[];
+  schema: { key: string; group: string; label: string; kind: string; default: unknown; source: string; help: string }[];
+  score_parameters: Record<string, { label: string; unit: string; source: string; weight: number }>;
+  rule_categories: string[];
+}
+
+export interface EngineComparison { engine_id: string; name: string; version: number; current: boolean; score: number | null; band: string | null; income: number | null; foir: number | null; reason: string | null }
+
+export interface ReportData {
+  case: { name: string; application_date: string; case_id: string };
+  notice: string;
+  snapshot_id: string;
+  versions: Record<string, string>;
+  reporting_currency: string;
+  profile: string;
+  metrics: Record<string, Metric>;
+  monthly: MonthRow[];
+  accounts: AccountView[];
+  statements: Statement[];
+  cross_checks: { account_id: string; kind: string; detail: string }[];
+  flags: Flag[];
+  fx: FxView;
+  credit_score: CreditScoreData | null;
+  reconciliation: ReconciliationData;
+  earnings: EarningsData | null;
+  statement_requests: StatementRequestsData;
+  engine: { id: string; name: string; version: number };
+  corrections: { txn_id: string; from_category: string; to_category: string; reason: string; actor: string; created_at: string }[];
+  evidence: Record<string, { date: string; description: string; direction: "C" | "D"; amount: number; currency: string; original: number; fx_rate: string | null;
+    category: string; status: string; why: string; account: string; sources: { file: string; page: number; row: number }[] }>;
 }
 
 export interface Account { account_id: string; acct_masked: string; bank_name: string; holder_masked: string; account_type: string | null }
@@ -97,6 +206,7 @@ export interface Statement {
   total_credits: number;
   recon_status: string;
   recon_diff: number | null;
+  currency?: string;
   n_rows: number;
   n_breaks: number;
 }
@@ -126,6 +236,19 @@ export interface Analysis {
   coverage: Record<string, string>;
   monthly: MonthRow[];
   metrics: Record<string, Metric>;
+  fx: FxView;
+  account_view: AccountView[];
+  credit_score: CreditScoreData | null;
+  reconciliation: ReconciliationData;
+  earnings: EarningsData | null;
+  statement_requests: StatementRequestsData;
+  engine: { id: string; name: string; version: number };
+  money_flows: {
+    edges: { from: string; to: string; possible: boolean; amount: number; count: number; txn_ids: string[] }[];
+    cycles: { path: string[]; amount: number; count: number; txn_ids: string[] }[];
+    parties: { counterparty: string; out: number; back: number; count: number; txn_ids: string[] }[];
+    pass_through: { account_id: string; amount: number; count: number; txn_ids: string[] }[];
+  };
   regular_outflows: { category: string; label: string; monthly_median: number; months: number; txn_ids: string[] }[];
   balance_series: { date: string; total: number }[];
   account_balance_series: Record<string, { date: string; balance: number }[]>;
@@ -170,6 +293,12 @@ export interface Txn {
   direction: "C" | "D";
   amount: number;
   flags: string[];
+  currency: string;
+  orig_debit: number;
+  orig_credit: number;
+  orig_balance: number | null;
+  fx_rate: string | null;
+  fx_missing: boolean;
 }
 
 export interface Contribution { signal: string; category: string; value: number; detail: string; weight_share?: number }

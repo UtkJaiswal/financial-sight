@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, ChevronRight, CopyCheck, Loader2, Lock, ShieldAlert, UploadCloud } from "lucide-react";
 import { api } from "../api";
 import type { Analysis, EditCheck, FileReport } from "../types";
-import { bytes, dateLabel, money } from "../fmt";
+import { bytes, dateLabel, moneyIn } from "../fmt";
+import StatementRequests from "../components/StatementRequests";
 import { ReconPill, useToast } from "../components/ui";
 
-interface Props { caseId: string; a: Analysis | null; canUpload: boolean; onUploaded: () => void }
+interface Props { caseId: string; a: Analysis | null; canUpload: boolean; onUploaded: () => void; onTxns: (ids: string[], label: string) => void }
 
 const FILE_STATUS: Record<string, [string, string]> = {
   processed: ["ok", "Processed"], partial: ["warn", "Partly processed"], failed: ["crit", "Not processed"],
@@ -51,7 +52,7 @@ function EditRisk({ check }: { check: EditCheck }) {
   );
 }
 
-export default function Statements({ caseId, a, canUpload, onUploaded }: Props) {
+export default function Statements({ caseId, a, canUpload, onUploaded, onTxns }: Props) {
   const toast = useToast();
   const [data, setData] = useState<Awaited<ReturnType<typeof api.files>> | null>(null);
   const [over, setOver] = useState(false);
@@ -82,6 +83,7 @@ export default function Statements({ caseId, a, canUpload, onUploaded }: Props) 
 
   return (
     <div className="content-inner">
+      <StatementRequests requests={a?.statement_requests} onTxns={onTxns} />
       {canUpload && (
         <div className={`drop ${over ? "over" : ""}`} onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
              onDrop={(e) => { e.preventDefault(); setOver(false); send([...e.dataTransfer.files]); }}>
@@ -153,11 +155,11 @@ export default function Statements({ caseId, a, canUpload, onUploaded }: Props) 
                 <div key={s.statement_id} className="stack" style={{ gap: 8 }}>
                   <div className="row wrap small"><b>{s.bank_name} {s.acct_masked}</b><span className="muted">{dateLabel(s.period_start)} – {dateLabel(s.period_end)} · {s.n_rows} rows · layout {s.layout}</span><span className="spacer" /><ReconPill status={s.recon_status} /></div>
                   <div className="recon">
-                    <div><div className="label">Opening {s.opening_source === "derived" ? "(derived)" : ""}</div><div className="v">{money(s.opening_paise, true)}</div></div>
-                    <div><div className="label">+ Credits</div><div className="v cr">{money(s.total_credits, true)}</div></div>
-                    <div><div className="label">− Debits</div><div className="v">{money(s.total_debits, true)}</div></div>
-                    <div><div className="label">= Computed closing</div><div className="v">{money(s.computed_closing, true)}</div></div>
-                    <div><div className="label">Stated closing</div><div className={`v ${s.recon_diff ? "neg" : "pos"}`}>{money(s.closing_stated, true)}{s.recon_diff ? ` (Δ ${money(s.recon_diff, true)})` : " ✓"}</div></div>
+                    <div><div className="label">Opening {s.opening_source === "derived" ? "(derived)" : ""}</div><div className="v">{moneyIn(s.currency, s.opening_paise)}</div></div>
+                    <div><div className="label">+ Credits</div><div className="v cr">{moneyIn(s.currency, s.total_credits)}</div></div>
+                    <div><div className="label">− Debits</div><div className="v">{moneyIn(s.currency, s.total_debits)}</div></div>
+                    <div><div className="label">= Computed closing</div><div className="v">{moneyIn(s.currency, s.computed_closing)}</div></div>
+                    <div><div className="label">Stated closing</div><div className={`v ${s.recon_diff ? "neg" : "pos"}`}>{moneyIn(s.currency, s.closing_stated)}{s.recon_diff ? ` (Δ ${moneyIn(s.currency, s.recon_diff)})` : " ✓"}</div></div>
                   </div>
                 </div>
               ))}

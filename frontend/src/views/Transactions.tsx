@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Flag, Search, X } from "lucide-react";
 import type { Account, Txn } from "../types";
-import { dateLabel, money } from "../fmt";
+import { dateLabel, money, moneyIn } from "../fmt";
 import { CategoryChip, StatusDot, useCats } from "../components/ui";
 
 interface Props {
@@ -14,6 +14,11 @@ interface Props {
 }
 
 type StatusF = "all" | "auto" | "review" | "unclassified" | "confirmed";
+
+function Amt({ t, paise, orig }: { t: Txn; paise: number; orig: number }) {
+  if (t.fx_missing) return <>{moneyIn(t.currency, orig)}<div className="small warn-text">no rate</div></>;
+  return <>{money(paise, true)}{t.currency !== "INR" && <div className="small muted">{moneyIn(t.currency, orig)} at {t.fx_rate}</div>}</>;
+}
 
 export default function Transactions({ txns, accounts, preset, onClearPreset, onOpen, selected }: Props) {
   const cats = useCats();
@@ -107,9 +112,9 @@ export default function Transactions({ txns, accounts, preset, onClearPreset, on
                       {t.tier === "gate" && t.status !== "confirmed" && <span className="conf">rule</span>}
                     </div>
                   </td>
-                  <td className="r num">{t.debit ? money(t.debit, true) : ""}</td>
-                  <td className="r num cr">{t.credit ? money(t.credit, true) : ""}</td>
-                  <td className="r num muted">{money(t.balance, true)}</td>
+                  <td className="r num">{t.orig_debit ? <Amt t={t} paise={t.debit} orig={t.orig_debit} /> : ""}</td>
+                  <td className="r num cr">{t.orig_credit ? <Amt t={t} paise={t.credit} orig={t.orig_credit} /> : ""}</td>
+                  <td className="r num muted">{t.fx_missing ? moneyIn(t.currency, t.orig_balance) : money(t.balance, true)}</td>
                 </tr>
               ))}
               {rows.length === 0 && <tr><td colSpan={7} className="muted" style={{ padding: 30, textAlign: "center" }}>No transactions match these filters.</td></tr>}

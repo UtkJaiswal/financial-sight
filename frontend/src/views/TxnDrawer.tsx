@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Eye, FileText, Link2, Loader2, Repeat, ShieldAlert } from "lucide-react";
 import { api } from "../api";
 import type { Diff, TxnDetail } from "../types";
-import { dateLabel, money, monthLabel, pct } from "../fmt";
+import { dateLabel, money, monthLabel, pct, moneyIn } from "../fmt";
 import { CategoryChip, Drawer, StatusDot, statusLabel, useCats, useToast } from "../components/ui";
 
 interface Props {
@@ -17,7 +17,7 @@ interface Props {
 const SIGNAL_NAMES: Record<string, string> = {
   rule: "Keyword rule", entity: "Entity memory", periodic: "Periodic memory", memory: "Semantic memory", account: "Account pattern", jev: "Jev",
 };
-const LINK_NAMES: Record<string, string> = { transfer_pair: "Own-account transfer pair", reversal_pair: "Reversal pair", bounce_pair: "Returned payment pair" };
+const LINK_NAMES: Record<string, string> = { rotation_near: "Possible rotation between own accounts", rotation_split: "Possible rotation, split across entries", rotation_party: "Possible rotation, same party", rotation_pass: "Possible rotation, in and straight out", transfer_pair: "Own-account transfer pair", reversal_pair: "Reversal pair", bounce_pair: "Returned payment pair" };
 
 export default function TxnDrawer({ caseId, txnId, canEdit, onClose, onOpen, onChanged }: Props) {
   const cats = useCats();
@@ -100,6 +100,7 @@ export default function TxnDrawer({ caseId, txnId, canEdit, onClose, onOpen, onC
               {d.classification.tier === "gate" && <span className="pill info">Hard rule</span>}
             </div>
             <div className="note">{d.classification.explanation}</div>
+            {t.currency !== "INR" && <div className="note info">{t.fx_missing ? `Printed in ${t.currency}. No exchange rate supplied, so this row is left out of every figure.` : `Printed as ${moneyIn(t.currency, t.orig_credit || t.orig_debit)}, converted at ${t.fx_rate} to ${money(t.amount, true)}.`}</div>}
             {t.override_category && (
               <div className="note info">Corrected by {t.override_actor}: “{t.override_reason}”. The model's own result is <b>{cats[t.model_category]?.label ?? t.model_category}</b>; every model result and correction is kept in the history below.</div>
             )}

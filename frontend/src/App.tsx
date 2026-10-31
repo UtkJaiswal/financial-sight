@@ -1,10 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { BarChart3, ClipboardCheck, Database, FileStack, FlaskConical, Flag as FlagIcon, ListChecks, Loader2, Moon, Plus, ScrollText, Sparkles, Sun } from "lucide-react";
+import { BarChart3, ClipboardCheck, FileText, Gauge, Landmark, Layers, Scale, Settings2, TrendingUp, Database, FileStack, FlaskConical, Flag as FlagIcon, ListChecks, Loader2, Moon, Plus, ScrollText, Sparkles, Sun } from "lucide-react";
 import { api, setIdentity } from "./api";
 import type { Analysis, CaseSummary, Diff, Meta, Txn } from "./types";
 import { compact, dateLabel, money, monthLabel, pct } from "./fmt";
 import { CatCtx, Empty, useToast } from "./components/ui";
 import Overview from "./views/Overview";
+import Accounts from "./views/Accounts";
+import Categories from "./views/Categories";
+import CreditScore from "./views/CreditScore";
+import Earnings from "./views/Earnings";
+import Reconciliation from "./views/Reconciliation";
+import RuleEngines from "./views/RuleEngines";
+import Report from "./views/Report";
 import Transactions from "./views/Transactions";
 import TxnDrawer from "./views/TxnDrawer";
 import MetricDrawer from "./views/MetricDrawer";
@@ -14,7 +21,7 @@ import Review from "./views/Review";
 import Accuracy from "./views/Accuracy";
 import Audit from "./views/Audit";
 
-type Tab = "overview" | "transactions" | "statements" | "flags" | "review" | "accuracy" | "audit";
+type Tab = "overview" | "score" | "report" | "earnings" | "categories" | "accounts" | "reconciliation" | "transactions" | "statements" | "flags" | "review" | "accuracy" | "audit";
 const ROLES: Record<string, string> = { analyst: "Credit analyst", senior: "Senior reviewer", auditor: "Auditor (read only)", admin: "Administrator" };
 
 const store = {
@@ -36,6 +43,7 @@ export default function App() {
   const [role, setRole] = useState(store.get("fs.role", "analyst"));
   const [theme, setTheme] = useState(store.get("fs.theme", window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light"));
   const [loadingDemo, setLoadingDemo] = useState(false);
+  const [enginesOpen, setEnginesOpen] = useState(false);
   const [newCase, setNewCase] = useState<{ name: string; date: string; profile: string } | null>(null);
 
   useEffect(() => { document.documentElement.dataset.theme = theme; store.set("fs.theme", theme); }, [theme]);
@@ -69,7 +77,7 @@ export default function App() {
       const r = await api.loadDemo();
       const cs = await refreshCases();
       setCaseId(r.cases[0] ?? cs[0]?.case_id ?? null);
-      toast({ title: "Sample cases loaded", body: "Two applicants: a salaried customer with PDF statements from two banks, and a trader with CSV, Excel and JSON statements." });
+      toast({ title: "Sample cases loaded", body: "Four applicants: a salaried customer with PDF statements, a trader with CSV, Excel and JSON statements, an exporter whose money moves between three accounts, and a designer paid in foreign currency." });
     } catch (e) { toast({ kind: "err", title: "Could not load samples", body: String((e as Error).message) }); }
     setLoadingDemo(false);
   }
@@ -107,6 +115,12 @@ export default function App() {
   const showTxns = (ids: string[], label: string) => { setPreset({ ids, label }); setTab("transactions"); setMetricOpen(null); };
   const tabs: [Tab, string, JSX.Element, number?, string?][] = [
     ["overview", "Overview", <BarChart3 size={15} />],
+    ["score", "Credit score", <Gauge size={15} />],
+    ["report", "Report", <FileText size={15} />],
+    ["earnings", "Earnings", <TrendingUp size={15} />],
+    ["categories", "Categories", <Layers size={15} />],
+    ["accounts", "Accounts", <Landmark size={15} />, a?.account_view?.length],
+    ["reconciliation", "Reconciliation", <Scale size={15} />],
     ["transactions", "Transactions", <ListChecks size={15} />, txns.length],
     ["statements", "Statements", <FileStack size={15} />, a?.statements.length],
     ["flags", "Indicators", <FlagIcon size={15} />, a?.flags.length, flagHigh ? "crit" : undefined],
@@ -125,12 +139,13 @@ export default function App() {
           </div>
           <div className="side-section stack" style={{ gap: 8 }}>
             <button className="side-btn primary" onClick={() => setNewCase({ name: "", date: new Date().toISOString().slice(0, 10), profile: "UNKNOWN" })} disabled={!canEdit}><Plus size={15} /> New case</button>
+            <button className={`side-btn ${enginesOpen ? "active" : ""}`} data-testid="open-engines" onClick={() => setEnginesOpen(true)}><Settings2 size={15} /> Rule engines</button>
             <button className="side-btn" onClick={loadDemo} disabled={loadingDemo || !canEdit}>{loadingDemo ? <Loader2 size={15} className="spin" /> : <Sparkles size={15} />} Load sample cases</button>
           </div>
           <div className="side-label"><span>Cases</span><span>{cases?.length ?? 0}</span></div>
           <div className="side-list">
             {cases?.map((c) => (
-              <button key={c.case_id} className={`case-item ${c.case_id === caseId ? "active" : ""}`} onClick={() => { setCaseId(c.case_id); setTab("overview"); }}>
+              <button key={c.case_id} className={`case-item ${c.case_id === caseId ? "active" : ""}`} onClick={() => { setCaseId(c.case_id); setTab("overview"); setEnginesOpen(false); }}>
                 <span className="case-name">{c.name}</span>
                 <span className="case-meta">
                   <span>{c.income ? `${compact(c.income)}/mo` : "No income yet"}</span>
@@ -173,7 +188,8 @@ export default function App() {
               </div>
             </div>
           )}
-          {current && (
+          {enginesOpen && <div className="content"><RuleEngines canEditEngines={role === "senior" || role === "admin"} onChanged={() => { if (caseId) refreshCase(caseId); }} /></div>}
+          {!enginesOpen && current && (
             <>
               <header className="topbar">
                 <div className="topbar-row">
@@ -187,7 +203,11 @@ export default function App() {
                   </div>
                   {a && (
                     <div className="stack" style={{ justifyItems: "end", gap: 6 }}>
-                      <span className="pill info">{a.profile === "SALARIED" ? "Salaried profile" : "Self-employed profile"}</span>
+                      <span className="row" style={{ gap: 6 }}>
+                        {a.credit_score && <button className="pill ok" data-testid="header-score" style={{ border: 0, cursor: "pointer" }} onClick={() => setTab("score")}>Score {a.credit_score.score ?? "not available"}</button>}
+                        <span className="pill">{a.engine?.name ?? "Standard"}</span>
+                        <span className="pill info">{a.profile === "SALARIED" ? "Salaried profile" : "Self-employed profile"}</span>
+                      </span>
                       <span className="small muted mono" title="Content-addressed snapshot: identical inputs give the same id">snapshot {a.snapshot_id.slice(5, 13)} · v{a.seq}</span>
                     </div>
                   )}
@@ -202,13 +222,19 @@ export default function App() {
               </header>
               <div className="content">
                 {!a && <div className="content-inner"><div className="kpis">{[0, 1, 2, 3, 4].map((i) => <div key={i} className="skeleton" style={{ height: 130 }} />)}</div><div className="skeleton" style={{ height: 320 }} /></div>}
-                {a && a.n_transactions === 0 && tab === "overview" && (
-                  <div className="content-inner"><Empty icon={<Database size={32} />} title="No transactions yet">Upload bank statements in the Statements tab. Results appear here once at least one file is processed.</Empty>
+                {a && !a.metrics?.estimated_income && tab === "overview" && (
+                  <div className="content-inner"><Empty icon={<Database size={32} />} title={a.n_transactions ? "Waiting for exchange rates" : "No transactions yet"}>{a.n_transactions ? "These statements are in a foreign currency and have no exchange rate yet. Add one in the Accounts tab; no rate is assumed. " : ""}Upload bank statements in the Statements tab. Results appear here once at least one file is processed.</Empty>
                     <div style={{ textAlign: "center" }}><button className="btn primary" onClick={() => setTab("statements")}>Go to Statements</button></div></div>
                 )}
-                {a && a.n_transactions > 0 && tab === "overview" && <Overview a={a} txns={txns} onMetric={setMetricOpen} onFlags={() => setTab("flags")} onTxns={showTxns} onStatements={() => setTab("statements")} />}
+                {a && a.metrics?.estimated_income && tab === "overview" && <Overview a={a} txns={txns} onMetric={setMetricOpen} onFlags={() => setTab("flags")} onTxns={showTxns} onStatements={() => setTab("statements")} />}
+                {a && tab === "score" && caseId && <CreditScore caseId={caseId} a={a} canEdit={canEdit} onTxns={showTxns} onChanged={() => { refreshCase(caseId); refreshCases(); }} />}
+                {a && tab === "earnings" && <Earnings a={a} onTxns={showTxns} />}
+                {a && tab === "reconciliation" && <Reconciliation a={a} onOpen={setTxnOpen} onEngines={() => setEnginesOpen(true)} />}
+                {a && tab === "report" && caseId && <Report caseId={caseId} version={a.snapshot_id} onOpen={setTxnOpen} onTxns={showTxns} />}
+                {a && tab === "accounts" && caseId && <Accounts caseId={caseId} a={a} canEdit={canEdit} onTxns={showTxns} onChanged={() => refreshCase(caseId)} />}
+                {a && tab === "categories" && <Categories a={a} txns={txns} onOpen={setTxnOpen} />}
                 {a && tab === "transactions" && <Transactions txns={txns} accounts={a.accounts} preset={preset} onClearPreset={() => setPreset(null)} onOpen={setTxnOpen} selected={txnOpen} />}
-                {tab === "statements" && caseId && <Statements caseId={caseId} a={a} canUpload={canEdit} onUploaded={() => { refreshCase(caseId); refreshCases(); }} />}
+                {tab === "statements" && caseId && <Statements caseId={caseId} a={a} canUpload={canEdit} onUploaded={() => { refreshCase(caseId); refreshCases(); }} onTxns={showTxns} />}
                 {a && tab === "flags" && <Flags flags={a.flags} onTxns={showTxns} />}
                 {a && tab === "review" && caseId && <Review caseId={caseId} txns={txns} canEdit={canEdit} onOpen={setTxnOpen} onChanged={onChanged} />}
                 {tab === "accuracy" && caseId && <Accuracy caseId={caseId} version={a?.snapshot_id ?? ""} onOpen={setTxnOpen} />}
