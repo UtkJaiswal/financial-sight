@@ -8,5 +8,22 @@
     "applicant": "Kavya Iyer (Sri Lakshmi Traders)",
     "application_date": "2026-07-08",
     "profile": "SELF_EMPLOYED"
+  },
+  "case_rotation": {
+    "applicant": "Neha Kapoor (Kapoor Exports)",
+    "application_date": "2026-07-05",
+    "profile": "SELF_EMPLOYED"
+  },
+  "case_multicurrency": {
+    "applicant": "Arjun Menon (Menon Design)",
+    "application_date": "2026-07-06",
+    "profile": "SELF_EMPLOYED",
+    "fx_rates": [
+      {
+        "currency": "USD",
+        "rate": "83.50",
+        "source": "Sample rate for this demo"
+      }
+    ]
   }
 }

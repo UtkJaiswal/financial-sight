@@ -380,6 +380,63 @@ def scanned_pdf(path: Path) -> None:
     c.save()
 
 
+def write_rotation_case() -> None:
+    """Three accounts passing the same ₹5 lakh around each month on top of about ₹1.15 lakh of real receipts.
+    Late and split credits are worded like sales, so they look like ₹6 lakh a month of income. Uses no random numbers."""
+    folder = OUT / "case_rotation"
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    real = {1: 110000, 2: 125000, 3: 95000, 4: 130000, 5: 105000, 6: 120000}
+    a, b, c = [], [], []
+    for m in range(1, 7):
+        a += [(f"08-{m:02d}-2026", f"NEFT/CLIENT PATEL TEXTILES/INV{m}0", 0, real[m]), (f"03-{m:02d}-2026", "IMPS/LANDLORD/OFFICE RENT", 35000, 0),
+              (f"10-{m:02d}-2026", "NACH/BAJAJ FINANCE LOAN EMI", 18000, 0), (f"11-{m:02d}-2026", f"RTGS/STEEL SUPPLIERS/PO{m}", 40000, 0),
+              (f"12-{m:02d}-2026", f"NEFT/KAPOOR AGENCIES/TRF{m}", 500000, 0)]
+        if m in (3, 6):  # split into two credits that look like two customers
+            b += [(f"13-{m:02d}-2026", f"NEFT/SHARMA TRADERS/INV{m}1", 0, 200000), (f"15-{m:02d}-2026", f"NEFT/GUPTA ENTERPRISES/INV{m}2", 0, 300000)]
+        else:  # arrives three days later, worded like a sale
+            b.append((f"15-{m:02d}-2026", f"NEFT/SHARMA TRADERS/INV{m}1", 0, 500000))
+        b.append((f"18-{m:02d}-2026", f"RTGS/VERMA AND CO/PAY{m}", 500000, 0))
+        c += [(f"18-{m:02d}-2026", f"RTGS/VERMA AND CO/PAY{m}", 0, 500000), (f"19-{m:02d}-2026", f"RTGS/MEHTA AND SONS/PAY{m}", 500000, 0)]
+        a.append((f"19-{m:02d}-2026", f"RTGS/MEHTA AND SONS/PAY{m}", 0, 500000))
+    for name, bank, acct, rows, opening in (("indus_trust", "Indus Trust Bank", "40010020031", a, 900000), ("harbour", "Harbour Bank", "50020030042", b, 100000),
+                                            ("lakeside", "Lakeside Bank", "60030040053", c, 100000)):
+        bal = opening
+        lines = []
+        for d, n, dr, cr in sorted(rows, key=lambda r: (r[0][3:5], r[0][:2])):
+            bal += cr - dr
+            lines.append(f"{d},{n},{dr or ''},{cr or ''},{bal:.2f}")
+        head = [f"{bank} - Account Statement", "Account Name:,NEHA KAPOOR", f"Account Number:,{acct}", "Statement Period:,01-01-2026 to 30-06-2026",
+                f"Opening Balance:,{opening:.2f}", f"Closing Balance:,{bal:.2f}", "", "Date,Description,Debit,Credit,Balance"]
+        (folder / f"{name}_jan-jun_2026.csv").write_text("\n".join(head + lines) + "\n", encoding="utf-8")
+
+
+def write_multicurrency_case() -> None:
+    """A designer paid in dollars, moving some to a rupee account, with a small sterling account that has no supplied rate."""
+    folder = OUT / "case_multicurrency"
+    if folder.exists():
+        shutil.rmtree(folder)
+    folder.mkdir(parents=True)
+    usd_in = {1: 2600, 2: 3100, 3: 2800, 4: 2950, 5: 2700, 6: 3000}
+    inr, usd, gbp = [], [], []
+    for m in range(1, 7):
+        usd += [(f"05-{m:02d}-2026", f"SWIFT/CLIENT NORTHSTAR INC/INV{m}", 0, usd_in[m]), (f"10-{m:02d}-2026", "FX SALE TO INR ACCOUNT", 2000, 0)]
+        inr += [(f"10-{m:02d}-2026", "FX PURCHASE FROM USD ACCOUNT", 0, 166500), (f"03-{m:02d}-2026", "IMPS/LANDLORD/HOUSE RENT", 42000, 0),
+                (f"12-{m:02d}-2026", "NACH/HDFC PERSONAL LOAN EMI", 15000, 0), (f"15-{m:02d}-2026", "UPI/BIGBASKET/GROCERY", 9000, 0)]
+        gbp.append((f"20-{m:02d}-2026", f"BACS/CLIENT HARTLEY LTD/INV{m}", 0, 400))
+    for name, bank, acct, cur, rows, opening in (("harbour_inr", "Harbour Bank", "70040050064", "INR", inr, 150000), ("globe_usd", "Globe Exchange Bank", "80050060075", "USD", usd, 1000),
+                                                 ("globe_gbp", "Globe Exchange Bank", "80050060086", "GBP", gbp, 200)):
+        bal = opening
+        lines = []
+        for d, n, dr, cr in sorted(rows, key=lambda r: (r[0][3:5], r[0][:2])):
+            bal += cr - dr
+            lines.append(f"{d},{n},{dr or ''},{cr or ''},{bal:.2f}")
+        head = [f"{bank} - Account Statement", "Account Name:,ARJUN MENON", f"Account Number:,{acct}", f"Account Currency:,{cur}", "Statement Period:,01-01-2026 to 30-06-2026",
+                f"Opening Balance:,{opening:.2f}", f"Closing Balance:,{bal:.2f}", "", "Date,Description,Debit,Credit,Balance"]
+        (folder / f"{name}_jan-jun_2026.csv").write_text("\n".join(head + lines) + "\n", encoding="utf-8")
+
+
 def main() -> None:
     s1, s2, pf = OUT / "case_salaried", OUT / "case_sme", OUT / "problem_files"
     for p in (s1, s2, pf):  # only this generator's folders; sample_data/tampered belongs to eval_tamper.py
@@ -421,7 +478,12 @@ def main() -> None:
     meta = {
         "case_salaried": {"applicant": "Rohan Malhotra", "application_date": "2026-07-10", "profile": "SALARIED"},
         "case_sme": {"applicant": "Kavya Iyer (Sri Lakshmi Traders)", "application_date": "2026-07-08", "profile": "SELF_EMPLOYED"},
+        "case_rotation": {"applicant": "Neha Kapoor (Kapoor Exports)", "application_date": "2026-07-05", "profile": "SELF_EMPLOYED"},
+        "case_multicurrency": {"applicant": "Arjun Menon (Menon Design)", "application_date": "2026-07-06", "profile": "SELF_EMPLOYED",
+                               "fx_rates": [{"currency": "USD", "rate": "83.50", "source": "Sample rate for this demo"}]},
     }
+    write_rotation_case()
+    write_multicurrency_case()
     (OUT / "cases.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
     (OUT / "ground_truth.json").write_text(json.dumps(truth, indent=1), encoding="utf-8")
 
