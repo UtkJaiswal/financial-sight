@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 
-from .classify.categories import CATEGORIES
+from .classify.categories import CATEGORIES, ROLLUP
 from .config import SAMPLE_DIR
 from .db import connect, q
 from .metrics import effective
@@ -32,7 +32,7 @@ def evaluate(case_id: str) -> dict:
     tp, fp, fn = Counter(), Counter(), Counter()
     errors = []
     for t, gold in rows:
-        pred = t["category"]
+        pred = ROLLUP.get(t["category"], t["category"])
         if pred == gold:
             tp[gold] += 1
         else:
@@ -54,7 +54,7 @@ def evaluate(case_id: str) -> dict:
     return {
         "available": True, "matched": len(rows), "accuracy": round(sum(tp.values()) / len(rows), 4),
         "auto_share": round(len(auto) / len(rows), 4),
-        "auto_accuracy": round(sum(1 for t, g in auto if t["category"] == g) / len(auto), 4) if auto else None,
+        "auto_accuracy": round(sum(1 for t, g in auto if ROLLUP.get(t["category"], t["category"]) == g) / len(auto), 4) if auto else None,
         "by_status": dict(by_status), "per_category": per_cat, "errors": errors[:60],
         "reconciliation_pass_rate": round(sum(1 for s in stmts if s["recon_status"] == "reconciled") / len(stmts), 3) if stmts else None,
     }

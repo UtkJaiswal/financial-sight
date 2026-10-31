@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import re
 import uuid
 from datetime import date, datetime
 from pathlib import Path
@@ -13,7 +14,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import analysis, config, evaluation
+from . import analysis, config, evaluation, fx, rule_engine
+from . import report as report_builder
 from .classify import semantic
 from .classify.categories import CATEGORIES
 from .db import connect, jdump, q, q1
@@ -34,6 +36,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http
 def _startup() -> None:
     connect()
     semantic.seed()
+    rule_engine.seed()
 
 
 def _json(obj) -> JSONResponse:
@@ -150,7 +153,113 @@ def list_files(case_id: str):
 @app.get("/api/cases/{case_id}/analysis")
 def get_analysis(case_id: str):
     _case(case_id)
-    return _json(analysis.latest(case_id) or analysis.run(case_id, "initial"))
+    return _json(analysis.current(case_id))
+
+
+@app.get("/api/cases/{case_id}/report")
+def get_report(case_id: str):
+    _case(case_id)
+    return _json(report_builder.build(case_id))
+
+
+@app.get("/api/cases/{case_id}/fx-rates")
+def get_rates(case_id: str):
+    _case(case_id)
+    return _json(q("SELECT currency, month, rate, source, actor, created_at FROM silver.fx_rates WHERE case_id = ? ORDER BY currency, month", [case_id]))
+
+
+@app.post("/api/cases/{case_id}/fx-rates")
+def set_rate(case_id: str, body: dict = Body(...), user: User = Depends(current_user)):
+    """A rate is supplied by a person, with where it came from. An empty rate removes it."""
+    require(user, "override")
+    _case(case_id)
+    cur, month = str(body.get("currency", "")).strip().upper(), str(body.get("month") or "").strip()
+    source, text = str(body.get("source") or "").strip(), str(body.get("rate") or "").strip()
+    if not re.fullmatch(r"[A-Z]{3}", cur) or cur == fx.REPORTING:
+        raise HTTPException(422, "choose a three-letter foreign currency")
+    if month and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", month):
+        raise HTTPException(422, "month must look like 2026-07, or be empty to apply to every month")
+    connect().execute("DELETE FROM silver.fx_rates WHERE case_id = ? AND currency = ? AND month = ?", [case_id, cur, month])
+    if text:
+        try:
+            fx.parse_rate(text)
+        except ValueError as e:
+            raise HTTPException(422, str(e))
+        if len(source) < 3:
+            raise HTTPException(422, "say where this rate came from")
+        connect().execute("INSERT INTO silver.fx_rates VALUES (?, ?, ?, ?, ?, ?, ?)", [case_id, cur, month, text, source, user.name, datetime.utcnow()])
+    audit.record("fx.rate", actor=user.name, role=user.role, case_id=case_id, target=cur, details={"month": month, "rate": text, "source": source})
+    return _json({"snapshot_id": analysis.run(case_id, f"fx:{cur}")["snapshot_id"]})
+
+
+@app.get("/api/rule-engines")
+def list_rule_engines():
+    return _json({"engines": rule_engine.list_engines(), "schema": rule_engine.SCHEMA, "score_parameters": rule_engine.SCORE_DEFAULTS, "rule_categories": rule_engine.RULE_CATEGORIES})
+
+
+@app.get("/api/rule-engines/{engine_id}")
+def get_rule_engine(engine_id: str):
+    e = rule_engine.get(engine_id)
+    if not e:
+        raise HTTPException(404, "engine not found")
+    return _json({**e, "history": rule_engine.history(engine_id)})
+
+
+@app.post("/api/rule-engines")
+def create_rule_engine(body: dict = Body(...), user: User = Depends(current_user)):
+    require(user, "edit_engine")
+    try:
+        e = rule_engine.create(body.get("name", ""), body.get("based_on"), body.get("description", ""), user.name)
+    except ValueError as err:
+        raise HTTPException(422, str(err))
+    audit.record("engine.create", actor=user.name, role=user.role, target=e["engine_id"], details={"name": e["name"], "based_on": body.get("based_on")})
+    return _json(e)
+
+
+@app.put("/api/rule-engines/{engine_id}")
+def update_rule_engine(engine_id: str, body: dict = Body(...), user: User = Depends(current_user)):
+    require(user, "edit_engine")
+    try:
+        e = rule_engine.update(engine_id, body.get("config") or {}, user.name, body.get("note", ""), body.get("name"), body.get("description"))
+    except LookupError as err:
+        raise HTTPException(404, str(err))
+    except ValueError as err:
+        raise HTTPException(422, str(err))
+    audit.record("engine.update", actor=user.name, role=user.role, target=engine_id, details={"version": e["version"], "note": body.get("note", "")})
+    return _json(e)
+
+
+@app.delete("/api/rule-engines/{engine_id}")
+def delete_rule_engine(engine_id: str, user: User = Depends(current_user)):
+    require(user, "edit_engine")
+    try:
+        rule_engine.delete(engine_id)
+    except ValueError as err:
+        raise HTTPException(422, str(err))
+    audit.record("engine.delete", actor=user.name, role=user.role, target=engine_id)
+    return {"deleted": True}
+
+
+@app.post("/api/cases/{case_id}/engine")
+def assign_rule_engine(case_id: str, body: dict = Body(...), user: User = Depends(current_user)):
+    """Which lender's engine reviews this case. The snapshot records the version used."""
+    require(user, "override")
+    _case(case_id)
+    before = analysis.current(case_id)
+    try:
+        e = rule_engine.assign(case_id, body.get("engine_id", ""), user.name)
+    except LookupError as err:
+        raise HTTPException(404, str(err))
+    audit.record("engine.assign", actor=user.name, role=user.role, case_id=case_id, target=e["engine_id"], details={"version": e["version"]})
+    after = analysis.run(case_id, f"engine:{e['engine_id']}")
+    return _json({"snapshot_id": after["snapshot_id"], "diff": analysis.diff(before, after)})
+
+
+@app.get("/api/cases/{case_id}/engine-comparison")
+def compare_rule_engines(case_id: str):
+    """How the same statements read under every engine, without changing the case."""
+    _case(case_id)
+    return _json(analysis.compare_engines(case_id))
 
 
 @app.get("/api/cases/{case_id}/snapshots")
@@ -172,7 +281,8 @@ def snapshot_diff(case_id: str, from_id: str, to_id: str):
 def _txn_view(t: dict) -> dict:
     keep = ["txn_id", "account_id", "txn_date", "description", "debit", "credit", "balance", "channel", "counterparty", "recon_status",
             "recon_note", "acct_masked", "bank_name", "category", "status", "model_category", "model_status", "tier", "source", "probability",
-            "margin", "explanation", "attributes", "override_category", "override_reason", "override_actor", "override_at", "direction", "amount"]
+            "margin", "explanation", "attributes", "override_category", "override_reason", "override_actor", "override_at", "direction", "amount",
+            "currency", "orig_debit", "orig_credit", "orig_balance", "fx_rate", "fx_missing"]
     out = {k: t.get(k) for k in keep}
     out["counterparty"] = "[Holder]" if out["counterparty"] == "<HOLDER>" else out["counterparty"]
     return out
@@ -181,7 +291,7 @@ def _txn_view(t: dict) -> dict:
 @app.get("/api/cases/{case_id}/transactions")
 def list_transactions(case_id: str):
     _case(case_id)
-    snap = analysis.latest(case_id)
+    snap = analysis.current(case_id)
     flagged: dict[str, list[str]] = {}
     for f in (snap or {}).get("flags", []):
         if f["category"] == "review":
@@ -286,6 +396,9 @@ def load_demo(user: User = Depends(current_user)):
             connect().execute("INSERT INTO silver.cases VALUES (?, ?, ?, ?, TRUE, ?, ?)",
                               [case_id, m["applicant"], date.fromisoformat(m["application_date"]), m["profile"], key, datetime.utcnow()])
             audit.record("case.create", actor=user.name, role=user.role, case_id=case_id, target=case_id, details={"demo": key})
+            for r in m.get("fx_rates", []):
+                connect().execute("INSERT OR REPLACE INTO silver.fx_rates VALUES (?, ?, ?, ?, ?, ?, ?)",
+                                  [case_id, r["currency"], r.get("month", ""), r["rate"], r["source"], user.name, datetime.utcnow()])
         files = sorted((config.SAMPLE_DIR / key).iterdir(), key=lambda p: (" (" in p.name, p.name))  # originals before copies
         if key == "case_salaried":
             files += sorted((config.SAMPLE_DIR / "problem_files").iterdir())
