@@ -69,3 +69,7 @@ knowledge store (versioned): rules, semantic examples, periodic patterns, entity
 - Fusion weights are hand-set (`w0`). The evaluation harness exists to compare them against learned weights later.
 - Accuracy figures come from synthetic data written alongside the rules, so they overstate real-world performance.
 - Roles come from request headers for the demo. Production would use SSO. Dev encryption keys are generated into `data/dev_keys.json`; production would use a KMS.
+
+## Documentation
+
+[docs/README.md](docs/README.md) indexes the detailed documentation: architecture, every decision and why it was taken, classification, calculations, data model, API, security and development.
