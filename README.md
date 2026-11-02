@@ -72,4 +72,15 @@ knowledge store (versioned): rules, semantic examples, periodic patterns, entity
 
 ## Documentation
 
-[docs/README.md](docs/README.md) indexes the detailed documentation: architecture, every decision and why it was taken, classification, calculations, data model, API, security and development.
+The [documentation index](docs/README.md) says where to look for what and defines the terms used throughout.
+
+| Document | What it covers |
+|---|---|
+| [Architecture](docs/ARCHITECTURE.md) | How the system fits together: components, the pipeline from upload to snapshot, the correction loop, rule engines, the UI, concurrency and failure handling. Ends with the [known gaps](docs/ARCHITECTURE.md#10-known-gaps) |
+| [Decision log](docs/DECISIONS.md) | 74 decisions: what was chosen, why, what it costs, and whether the reason was recorded at the time or inferred from the code |
+| [Classification](docs/CLASSIFICATION.md) | Why a row gets its category: hard gates, every signal and rule weight, the decision policy, the rotation check and worked examples |
+| [Calculations](docs/CALCULATIONS.md) | How each figure is worked out: income, obligations, FOIR, surplus, cash-flow trend, the credit score, edit risk, every risk indicator and the lender settings |
+| [Data model](docs/DATA_MODEL.md) | Every table by storage layer, how IDs are made, what triggers a recompute, and how to trace a figure back to its source row |
+| [API](docs/API.md) | Every route with its required role, request bodies, errors, and examples for uploading a statement and correcting a row |
+| [Security and privacy](docs/SECURITY.md) | Masking, encryption, roles, the audit log and external model controls, plus [what is not done](docs/SECURITY.md#what-is-not-done) and must be before real use |
+| [Development](docs/DEVELOPMENT.md) | Setup, running, testing, and step-by-step guides for [changing rules](docs/DEVELOPMENT.md#changing-rules-or-categories), settings, flags, figures and file formats |
